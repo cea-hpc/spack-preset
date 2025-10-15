@@ -374,8 +374,6 @@ def preset(parser, args):
         cmake_args = []
         if hasattr(builder, "std_cmake_args"):
             cmake_args += builder.std_cmake_args
-        else:
-            cmake_args += spack_repo.builtin.build_systems.cmake.CMakeBuilder.std_args(spec.package)
 
         if hasattr(builder, "cmake_args"):
             cmake_args += builder.cmake_args()
