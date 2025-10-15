@@ -1,24 +1,19 @@
 """Test spack preset command."""
 
+import pathlib
+import json
+import os
 import pytest
 
 import spack.main
 from spack import environment as ev
-
 from preset.cmd.preset import escape_cmake_macros
 from spack.spec import Spec
 
-# everything here uses the mock_env_path
-pytestmark = pytest.mark.usefixtures("mutable_mock_env_path", "mutable_config", "mutable_mock_repo")
-
+install = spack.main.SpackCommand("install")
+env = spack.main.SpackCommand("env")
+add = spack.main.SpackCommand("add")
 spack_preset = spack.main.SpackCommand("preset")
-
-
-def _read(path):
-    """Read the whole file."""
-    with open(path, "r") as f:
-        return f.read()
-
 
 @pytest.fixture()
 def test_env(mock_stage, mock_fetch, install_mockery):
@@ -28,66 +23,38 @@ def test_env(mock_stage, mock_fetch, install_mockery):
         yield e
 
 
-def test_preset_simple(tmpdir, mock_stage, mock_fetch, install_mockery):
+def test_preset_simple(tmpdir: pathlib.Path, mock_stage, mock_fetch, install_mockery):
     """Test."""
-    src = str(tmpdir.mkdir("src"))
-    preset = str(tmpdir.join("CMakeUserPresets.json"))
-    args = ["-d", src, "-o", preset]
+    CMakeUserPresets_filepath = tmpdir / "CMakeUserPresets.json"
+    log = "test"
+    install("--fake", "cmake-client")
+    spack_preset("-o", str(CMakeUserPresets_filepath), "cmake-client")
 
-    spec = "cmake-client@=develop"
-    print(spack_preset(*(args + [spec])))
-    assert spec in _read(preset)
+    with CMakeUserPresets_filepath.open("r") as json_file:
+        presets = json.load(json_file)
 
-
-def test_preset_from_env(tmpdir, test_env):
-    """Test."""
-    test_env.add("cmake-client@=develop")
-    test_env.concretize()
-
-    src = str(tmpdir.mkdir("src"))
-    preset = str(tmpdir.join("CMakePresets.json"))
-    args = ["-d", src, "-o", preset]
-
-    spack_preset(
-        *(
-            args
-            + [
-                "--build-dir",
-                r"$penv{HOME}/build/${sourceDirName}/${presetName}",
-                "--with-name",
-                "mypreset",
-                "cmake-client@develop",
-            ]
-        )
-    )
-    specstr = list(test_env.roots())[0]
-    assert specstr.dag_hash() in _read(preset)
+    assert presets["configurePresets"][0]["environment"]["SPACK_ROOT"] == os.environ["SPACK_ROOT"]
 
 
-# def test_preset_from_root(tmpdir, test_env):
-#     """Test."""
-#     test_env.add('cmake-client@develop')
-#     test_env.add('cmake-client@develop single=red')
-#     test_env.concretize()
+def test_preset_from_env(tmpdir: pathlib.Path,
+    mutable_mock_env_path, mock_packages, mock_fetch, install_mockery
+):
+    env("create", "test", view=False)
+    with ev.read("test"):
 
-#     src = str(tmpdir.mkdir('src'))
-#     preset = str(tmpdir.join('preset.cmake'))
-#     args = ['-d', src, '-o', preset]
+        add("cmake-client")
+        install("--fake", "--test", "all")
+        CMakeUserPresets_filepath = tmpdir / "CMakeUserPresets.json"
 
-#     spack_preset(*(args + ['--from-env', 'cmake-client@develop']))
-#     assert 'single=blue' in _read(preset)
-#     assert 'single=red' not in _read(preset)
+        spack_preset("-o", str(CMakeUserPresets_filepath),
+                     "--build-dir", r"build/${sourceDirName}/${presetName}",
+                     "--with-name", "mypreset")
 
-#     spack_preset(*(args + ['--from-root', 'cmake-client single=red',
-#                                 'cmake-client@develop']))
-#     assert 'single=blue' not in _read(preset)
-#     assert 'single=red' in _read(preset)
+    with CMakeUserPresets_filepath.open("r") as json_file:
+        presets = json.load(json_file)
 
-#     # Test failure on multiple matches of --from-root
-#     with pytest.raises(SpackCommandError):
-#         spack_preset(*(args + ['--from-root', 'cmake-client',
-#                                     'cmake-client@develop']))
-#     # assert 'can only match a single root' in e
+    assert presets["configurePresets"][0]["name"] == "mypreset"
+    assert presets["configurePresets"][0]["binaryDir"] == "build/${sourceDirName}/${presetName}"
 
 
 def test_escape_cmake_macros(mock_packages):
