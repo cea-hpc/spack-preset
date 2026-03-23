@@ -293,7 +293,7 @@ def preset(parser, args):
 
         os.environ.clear()
         os.environ.update(orig_env)
-
+        tty.msg(str(spec))
         # preset already present?
         previous_preset_existed = False
         if any(p["name"] == preset_name for p in presets["configurePresets"]):
@@ -414,17 +414,85 @@ def preset(parser, args):
                     pass  # see below for compilers
                 elif isinstance(modifier, spack.util.environment.UnsetEnv):
                     pass
-                elif isinstance(modifier, spack.util.environment.SetEnv) or isinstance(
-                    modifier, spack.util.environment.SetPath
-                ):
-                    configure_preset["environment"][modifier.name] = modifier.value
+                elif isinstance(modifier, spack.util.environment.SetEnv) or \
+                     isinstance(modifier, spack.util.environment.SetPath):
+                    if "compiler-wrapper" in modifier.value:
+                        if any([modifier.value.endswith(compiler) for
+                                compiler in ["amdclang",
+                                             "armclang",
+                                             "cc",
+                                             "clang",
+                                             "craycc",
+                                             "gcc",
+                                             "icc",
+                                             "nvc",
+                                             "xlc",
+                                             "xlc_r"
+                                             ]]):
+                            configure_preset["environment"][modifier.name] = \
+                                os.getenv("SPACK_{}".format("CC"))
+                            pass
+                        elif any([modifier.value.endswith(compiler) for
+                                  compiler in ["amdclang++",
+                                               "armclang++",
+                                               "CC",
+                                               "clang++",
+                                               "crayCC",
+                                               "fcc",
+                                               "FCC",
+                                               "g++",
+                                               "icpc",
+                                               "icpx",
+                                               "icx",
+                                               "nvc++",
+                                               "xlc++",
+                                               "xlc++_r"
+                                               ]]):
+                            configure_preset["environment"][modifier.name] = \
+                                os.getenv("SPACK_{}".format("CXX"))
+                        elif any([modifier.value.endswith(compiler) for
+                                  compiler in ["amdflang",
+                                               "armflang",
+                                               "crayftn",
+                                               "flang",
+                                               "frt",
+                                               "ftn",
+                                               "gfortran",
+                                               "ifort",
+                                               "ifx",
+                                               "nagfor",
+                                               "nvfortran",
+                                               "xlf",
+                                               "xlf90",
+                                               "xlf90_r",
+                                               "xlf_r"
+                                               ]]):
+                            configure_preset["environment"][modifier.name] = \
+                                os.getenv("SPACK_{}".format("FC"))
+                        else:
+                            tty.warn(
+                                "spack compiler-wrapper detected, "
+                                "but don't know what compiler to use "
+                                "for substitution: " +
+                                modifier.name + ": " + modifier.value
+                            )
+                    else:
+                        configure_preset["environment"][modifier.name] = \
+                            modifier.value
                 elif isinstance(modifier, spack.util.environment.PrependPath):
+                    if "compiler-wrapper" in modifier.value or \
+                       "gcc-runtime" in modifier.value:
+                        continue
                     configure_preset["environment"][modifier.name] = (
                         modifier.value
                         if modifier.name not in configure_preset["environment"]
-                        else modifier.value + ":" + configure_preset["environment"][modifier.name]
+                        else modifier.value + ":" +
+                        configure_preset["environment"][modifier.name]
                     )
                 elif isinstance(modifier, spack.util.environment.AppendPath):
+                    if "compiler-wrapper" in modifier.value or \
+                       "gcc-runtime" in modifier.value:
+                        continue
                     configure_preset["environment"][modifier.name] = (
                         modifier.value
                         if modifier.name not in configure_preset["environment"]
@@ -453,6 +521,10 @@ def preset(parser, args):
         cppflags = os.getenv("SPACK_CPPFLAGS", "")
 
         for envlang, envflags, cmakelang in languages_vars:
+
+            if cmakelang.lower() not in spec:  # skip language (e.g. fortran)
+                continue
+
             k = "CMAKE_{}_COMPILER".format(cmakelang)
             # TODO check for k for not overridding
             configure_preset["cacheVariables"][k] = {
