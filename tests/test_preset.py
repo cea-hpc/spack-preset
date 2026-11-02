@@ -1,19 +1,24 @@
+# Copyright CEA
+# Authors: Pierre Duperray <pierre.duperray@cea.fr>, Jordan Galby
+# SPDX-License-Identifier: (Apache-2.0 OR MIT)
 """Test spack preset command."""
 
-import pathlib
 import json
 import os
-import pytest
+import pathlib
 
+import pytest
 import spack.main
 from spack import environment as ev
-from preset.cmd.preset import escape_cmake_macros
 from spack.spec import Spec
+
+from preset.cmd.preset import escape_cmake_macros
 
 install = spack.main.SpackCommand("install")
 env = spack.main.SpackCommand("env")
 add = spack.main.SpackCommand("add")
 spack_preset = spack.main.SpackCommand("preset")
+
 
 @pytest.fixture()
 def test_env(mock_stage, mock_fetch, install_mockery):
@@ -33,28 +38,42 @@ def test_preset_simple(tmpdir: pathlib.Path, mock_stage, mock_fetch, install_moc
     with CMakeUserPresets_filepath.open("r") as json_file:
         presets = json.load(json_file)
 
-    assert presets["configurePresets"][0]["environment"]["SPACK_ROOT"] == os.environ["SPACK_ROOT"]
+    assert (
+        presets["configurePresets"][0]["environment"]["SPACK_ROOT"]
+        == os.environ["SPACK_ROOT"]
+    )
 
 
-def test_preset_from_env(tmpdir: pathlib.Path,
-    mutable_mock_env_path, mock_packages, mock_fetch, install_mockery
+def test_preset_from_env(
+    tmpdir: pathlib.Path,
+    mutable_mock_env_path,
+    mock_packages,
+    mock_fetch,
+    install_mockery,
 ):
     env("create", "test", view=False)
     with ev.read("test"):
-
         add("cmake-client")
         install("--fake", "--test", "all")
         CMakeUserPresets_filepath = tmpdir / "CMakeUserPresets.json"
 
-        spack_preset("-o", str(CMakeUserPresets_filepath),
-                     "--build-dir", r"build/${sourceDirName}/${presetName}",
-                     "--with-name", "mypreset")
+        spack_preset(
+            "-o",
+            str(CMakeUserPresets_filepath),
+            "--build-dir",
+            r"build/${sourceDirName}/${presetName}",
+            "--with-name",
+            "mypreset",
+        )
 
     with CMakeUserPresets_filepath.open("r") as json_file:
         presets = json.load(json_file)
 
     assert presets["configurePresets"][0]["name"] == "mypreset"
-    assert presets["configurePresets"][0]["binaryDir"] == "build/${sourceDirName}/${presetName}"
+    assert (
+        presets["configurePresets"][0]["binaryDir"]
+        == "build/${sourceDirName}/${presetName}"
+    )
 
 
 def test_escape_cmake_macros(mock_packages):

@@ -1,3 +1,6 @@
+# Copyright CEA
+# Authors: Pierre Duperray <pierre.duperray@cea.fr>, Jordan Galby
+# SPDX-License-Identifier: (Apache-2.0 OR MIT)
 """Generate cmake presets to build a spec."""
 
 import json
@@ -6,16 +9,15 @@ import pathlib
 import re
 from textwrap import dedent
 
-import spack.llnl.util.tty as tty
-from spack.package import memoized
-
 import spack.cmd
-import spack.cmd.common.arguments as arguments
 import spack.config
 import spack.environment as ev
 import spack.repo
 import spack.util
+from spack.cmd.common import arguments
 from spack.installer import PackageInstaller
+from spack.llnl.util import tty
+from spack.package import memoized
 from spack.paths import spack_root
 from spack.spec import DISPLAY_FORMAT
 from spack.stage import DevelopStage
@@ -29,7 +31,7 @@ level = "long"
 @memoized
 def _cmake_define_re():
     return re.compile(
-        r"^(\-D)?(?P<variable>[^:=]+)(:(?P<type>(BOOL|PATH|FILEPATH|STRING|INTERNAL|STATIC|UNINITIALIZED)))?(=(?P<value>.+))?$"  # noqa: E501
+        r"^(\-D)?(?P<variable>[^:=]+)(:(?P<type>(BOOL|PATH|FILEPATH|STRING|INTERNAL|STATIC|UNINITIALIZED)))?(=(?P<value>.+))?$"
     )
 
 
@@ -50,7 +52,10 @@ def parse_cmake_define(arg):
 def escape_cmake_macros(fmt):
     """Escapes cmake macros so they are not interpreted as spack spec format string"""
     return re.sub(
-        r"((?<!\\)(?:\\\\)*\$[a-z0-9_-]*)\{([^{}]*)\}", r"\1\{\2\}", fmt, flags=re.IGNORECASE
+        r"((?<!\\)(?:\\\\)*\$[a-z0-9_-]*)\{([^{}]*)\}",
+        r"\1\{\2\}",
+        fmt,
+        flags=re.IGNORECASE,
     )
 
 
@@ -84,7 +89,9 @@ def setup_parser(subparser):
         default="CMakeUserPresets.json",
         help="output presets json file (default to current dir. ./CMakeUserPresets.json)",
     )
-    subparser.add_argument("-y", "--overwrite", action="store_true", help="overwrite presets")
+    subparser.add_argument(
+        "-y", "--overwrite", action="store_true", help="overwrite presets"
+    )
     subparser.add_argument(
         "--with-name", default="{hash}", type=str, help="Preset 'name'. " + fmtstrdoc
     )
@@ -109,7 +116,9 @@ def setup_parser(subparser):
         action="store_true",
         help="Don't generate build presets (only configuration presets)",
     )
-    subparser.add_argument("--no-test", action="store_true", help="don't generate test presets")
+    subparser.add_argument(
+        "--no-test", action="store_true", help="don't generate test presets"
+    )
     subparser.add_argument(
         "--hidden", action="store_true", help="mark configure presets as 'hidden'"
     )
@@ -135,7 +144,9 @@ def setup_parser(subparser):
         help="Exclude spec (can be used multiple times), WARNING quote if spec is multiworded",
     )
     subparser.add_argument(
-        "--no-deps-install", action="store_true", help="do not install missing dependencies"
+        "--no-deps-install",
+        action="store_true",
+        help="do not install missing dependencies",
     )
     arguments.add_common_arguments(subparser, ["no_checksum"])
     cd_group = subparser.add_mutually_exclusive_group()
@@ -175,7 +186,9 @@ def preset(parser, args):
                 for dep in root.traverse(deptype="all", root=True, cover="nodes"):
                     for user_spec in user_specs:
                         if dep.satisfies(user_spec):
-                            specs.append((f"{user_spec} VIA ROOT SPEC {user_root}", dep))
+                            specs.append(
+                                (f"{user_spec} VIA ROOT SPEC {user_root}", dep)
+                            )
             if not specs:
                 tty.die(f"Could not find any specs in env matching '{args.constraint}'")
 
@@ -202,7 +215,9 @@ def preset(parser, args):
     # if needed exclude specs from list
     if args.exclude_specs:
         for spec_to_be_excluded in args.exclude_specs:
-            filtered_specs = [spec for spec in specs if not spec[1].satisfies(spec_to_be_excluded)]
+            filtered_specs = [
+                spec for spec in specs if not spec[1].satisfies(spec_to_be_excluded)
+            ]
             specs = filtered_specs
 
     if presets is None:
@@ -211,20 +226,21 @@ def preset(parser, args):
     if "configurePresets" not in presets:
         presets["configurePresets"] = []
 
-    if not args.no_build:  # that is build ;x
+    if not args.no_build and "buildPresets" not in presets:  # that is build ;x
         # yes generate buildPresets keys
-        if "buildPresets" not in presets:
-            presets["buildPresets"] = []
+        presets["buildPresets"] = []
 
-    if not args.no_test:
+    if not args.no_test and "testPresets" not in presets:
         # yes generate testPresets keys
-        if "testPresets" not in presets:
-            presets["testPresets"] = []
+        presets["testPresets"] = []
 
     preset_names = []
     for user_spec, spec in specs:
         preset_name = spec_format_string(spec, args.with_name, user_spec=user_spec)
-        other = next(iter(us for (us, s), n in zip(specs, preset_names) if n == preset_name), None)
+        other = next(
+            iter(us for (us, s), n in zip(specs, preset_names) if n == preset_name),
+            None,
+        )
         if other is not None:
             if preset_name == args.with_name:
                 name = f"{preset_name!r}"
@@ -290,7 +306,6 @@ def preset(parser, args):
     orig_env = os.environ.copy()
 
     for (user_spec, spec), preset_name in zip(specs, preset_names):
-
         os.environ.clear()
         os.environ.update(orig_env)
         tty.msg(str(spec))
@@ -326,7 +341,9 @@ def preset(parser, args):
 
         preset_names = {
             "name": preset_name,
-            "displayName": spec_format_string(spec, args.with_display_name, user_spec=user_spec),
+            "displayName": spec_format_string(
+                spec, args.with_display_name, user_spec=user_spec
+            ),
         }
         if args.with_description is not None:
             preset_names["description"] = spec_format_string(
@@ -351,9 +368,9 @@ def preset(parser, args):
             ("CXX", "CXXFLAGS", "CXX"),
             ("FC", "FFLAGS", "Fortran"),
         ]
-        cmake_linker_flags_vars = list(
-            "CMAKE_{}_LINKER_FLAGS".format(t) for t in ["EXE", "MODULE", "SHARED"]
-        )
+        cmake_linker_flags_vars = [
+            f"CMAKE_{t}_LINKER_FLAGS" for t in ["EXE", "MODULE", "SHARED"]
+        ]
 
         #
         # Then, adds package's cmake -D
@@ -367,7 +384,7 @@ def preset(parser, args):
         save_for_later = {"CMAKE_INSTALL_RPATH": None, "CMAKE_BUILD_RPATH": None}
         save_for_later.update({k: None for k in cmake_linker_flags_vars})
         save_for_later.update(
-            {"CMAKE_{}_FLAGS".format(cmakelang): None for _, _, cmakelang in languages_vars}
+            {f"CMAKE_{cmakelang}_FLAGS": None for _, _, cmakelang in languages_vars}
         )
 
         builder = spack.builder.create(spec.package)
@@ -383,7 +400,7 @@ def preset(parser, args):
                 continue
             k, t, v = parse_cmake_define(arg)
             if not k:
-                tty.warn("Unrecognized cmake argument {!r}".format(arg))
+                tty.warn("Unrecognized cmake argument {arg!r}")
                 continue
             t = t or "STRING"
             v = v or ""
@@ -402,101 +419,125 @@ def preset(parser, args):
         for _, actions in sorted(env_modifications.items()):
             for modifier in actions:
                 if (
-                    modifier.name in [env_var for lang in languages_vars for env_var in lang]
+                    modifier.name
+                    in [env_var for lang in languages_vars for env_var in lang]
                     or modifier.name == "F77"
                     or modifier.name == "LDCXXSHARED"
                     or modifier.name == "LDSHARED"
                     or modifier.name.startswith("SPACK_")
                     or hasattr(modifier, "value")
-                    and modifier.value.startswith(os.path.join(spack_root, "lib", "spack", "env"))
+                    and modifier.value.startswith(
+                        os.path.join(spack_root, "lib", "spack", "env")
+                    )
                 ):
                     # skipping all SPACK_ and language compiler related stuff,
                     pass  # see below for compilers
                 elif isinstance(modifier, spack.util.environment.UnsetEnv):
                     pass
-                elif isinstance(modifier, spack.util.environment.SetEnv) or \
-                     isinstance(modifier, spack.util.environment.SetPath):
+                elif isinstance(
+                    modifier,
+                    (spack.util.environment.SetEnv, spack.util.environment.SetPath),
+                ):
                     if "compiler-wrapper" in modifier.value:
-                        if any([modifier.value.endswith(compiler) for
-                                compiler in ["amdclang",
-                                             "armclang",
-                                             "cc",
-                                             "clang",
-                                             "craycc",
-                                             "gcc",
-                                             "icc",
-                                             "nvc",
-                                             "xlc",
-                                             "xlc_r"
-                                             ]]):
-                            configure_preset["environment"][modifier.name] = \
-                                os.getenv("SPACK_{}".format("CC"))
-                            pass
-                        elif any([modifier.value.endswith(compiler) for
-                                  compiler in ["amdclang++",
-                                               "armclang++",
-                                               "CC",
-                                               "clang++",
-                                               "crayCC",
-                                               "fcc",
-                                               "FCC",
-                                               "g++",
-                                               "icpc",
-                                               "icpx",
-                                               "icx",
-                                               "nvc++",
-                                               "xlc++",
-                                               "xlc++_r"
-                                               ]]):
-                            configure_preset["environment"][modifier.name] = \
-                                os.getenv("SPACK_{}".format("CXX"))
-                        elif any([modifier.value.endswith(compiler) for
-                                  compiler in ["amdflang",
-                                               "armflang",
-                                               "crayftn",
-                                               "flang",
-                                               "frt",
-                                               "ftn",
-                                               "gfortran",
-                                               "ifort",
-                                               "ifx",
-                                               "nagfor",
-                                               "nvfortran",
-                                               "xlf",
-                                               "xlf90",
-                                               "xlf90_r",
-                                               "xlf_r"
-                                               ]]):
-                            configure_preset["environment"][modifier.name] = \
-                                os.getenv("SPACK_{}".format("FC"))
+                        if any(
+                            modifier.value.endswith(compiler)
+                            for compiler in [
+                                "amdclang",
+                                "armclang",
+                                "cc",
+                                "clang",
+                                "craycc",
+                                "gcc",
+                                "icc",
+                                "nvc",
+                                "xlc",
+                                "xlc_r",
+                            ]
+                        ):
+                            configure_preset["environment"][modifier.name] = os.getenv(
+                                "SPACK_{}".format("CC")
+                            )
+                        elif any(
+                            modifier.value.endswith(compiler)
+                            for compiler in [
+                                "amdclang++",
+                                "armclang++",
+                                "CC",
+                                "clang++",
+                                "crayCC",
+                                "fcc",
+                                "FCC",
+                                "g++",
+                                "icpc",
+                                "icpx",
+                                "icx",
+                                "nvc++",
+                                "xlc++",
+                                "xlc++_r",
+                            ]
+                        ):
+                            configure_preset["environment"][modifier.name] = os.getenv(
+                                "SPACK_{}".format("CXX")
+                            )
+                        elif any(
+                            modifier.value.endswith(compiler)
+                            for compiler in [
+                                "amdflang",
+                                "armflang",
+                                "crayftn",
+                                "flang",
+                                "frt",
+                                "ftn",
+                                "gfortran",
+                                "ifort",
+                                "ifx",
+                                "nagfor",
+                                "nvfortran",
+                                "xlf",
+                                "xlf90",
+                                "xlf90_r",
+                                "xlf_r",
+                            ]
+                        ):
+                            configure_preset["environment"][modifier.name] = os.getenv(
+                                "SPACK_{}".format("FC")
+                            )
                         else:
                             tty.warn(
                                 "spack compiler-wrapper detected, "
                                 "but don't know what compiler to use "
-                                "for substitution: " +
-                                modifier.name + ": " + modifier.value
+                                "for substitution: "
+                                + modifier.name
+                                + ": "
+                                + modifier.value
                             )
                     else:
-                        configure_preset["environment"][modifier.name] = \
-                            modifier.value
+                        configure_preset["environment"][modifier.name] = modifier.value
                 elif isinstance(modifier, spack.util.environment.PrependPath):
-                    if "compiler-wrapper" in modifier.value or \
-                       "gcc-runtime" in modifier.value:
+                    if (
+                        "compiler-wrapper" in modifier.value
+                        or "gcc-runtime" in modifier.value
+                    ):
                         continue
                     configure_preset["environment"][modifier.name] = (
                         modifier.value
                         if modifier.name not in configure_preset["environment"]
-                        else modifier.value + ":" +
-                        configure_preset["environment"][modifier.name]
+                        else modifier.value
+                        + ":"
+                        + configure_preset["environment"][modifier.name]
                     )
                 elif isinstance(modifier, spack.util.environment.AppendPath):
-                    if "compiler-wrapper" in modifier.value or \
-                       "gcc-runtime" in modifier.value:
+                    if (
+                        "compiler-wrapper" in modifier.value
+                        or "gcc-runtime" in modifier.value
+                    ):
                         continue
                     configure_preset["environment"][modifier.name] = (
                         modifier.value
                         if modifier.name not in configure_preset["environment"]
-                        else configure_preset["environment"][modifier.name] + ":" + modifier.value
+                        else configure_preset["environment"][modifier.name]
+                        + ":"
+                        + modifier.value
                     )
                 else:
                     tty.warn(
@@ -521,28 +562,30 @@ def preset(parser, args):
         cppflags = os.getenv("SPACK_CPPFLAGS", "")
 
         for envlang, envflags, cmakelang in languages_vars:
-
             if cmakelang.lower() not in spec:  # skip language (e.g. fortran)
                 continue
 
-            k = "CMAKE_{}_COMPILER".format(cmakelang)
+            k = f"CMAKE_{cmakelang}_COMPILER"
             # TODO check for k for not overridding
             configure_preset["cacheVariables"][k] = {
                 "type": "STRING",
-                "value": os.getenv("SPACK_{}".format(envlang)),
+                "value": os.getenv(f"SPACK_{envlang}"),
             }
 
-            k = "CMAKE_{}_FLAGS".format(cmakelang)
+            k = f"CMAKE_{cmakelang}_FLAGS"
             flags = [
                 os.getenv(envflags, ""),
                 target_flags,
                 cppflags,
-                os.getenv("SPACK_{}".format(envflags), ""),
+                os.getenv(f"SPACK_{envflags}", ""),
                 save_for_later[k] or "",
             ]
-            configure_preset["cacheVariables"][k] = {"type": "STRING", "value": join(" ", flags)}
+            configure_preset["cacheVariables"][k] = {
+                "type": "STRING",
+                "value": join(" ", flags),
+            }
 
-            k = "CMAKE_{}_STANDARD_LIBRARIES".format(cmakelang)
+            k = f"CMAKE_{cmakelang}_STANDARD_LIBRARIES"
             configure_preset["cacheVariables"][k] = {"type": "STRING", "value": ldlibs}
 
         ldflags = [os.getenv("LDFLAGS", ""), os.getenv("SPACK_LDFLAGS", "")]
@@ -554,17 +597,21 @@ def preset(parser, args):
         )
 
         for k in cmake_linker_flags_vars:
-
             configure_preset["cacheVariables"][k] = {
                 "type": "STRING",
                 "value": join(
-                    " ", ldflags + [spack_new_dtags_flag_to_add] + [save_for_later[k] or ""]
+                    " ",
+                    ldflags + [spack_new_dtags_flag_to_add] + [save_for_later[k] or ""],
                 ),
             }
 
         rpaths = []
-        rpaths.extend(os.getenv("SPACK_COMPILER_EXTRA_RPATHS", "").replace(":", ";").split(";"))
-        rpaths.extend(os.getenv("SPACK_COMPILER_IMPLICIT_RPATHS", "").replace(":", ";").split(";"))
+        rpaths.extend(
+            os.getenv("SPACK_COMPILER_EXTRA_RPATHS", "").replace(":", ";").split(";")
+        )
+        rpaths.extend(
+            os.getenv("SPACK_COMPILER_IMPLICIT_RPATHS", "").replace(":", ";").split(";")
+        )
         for k in ["CMAKE_BUILD_RPATH", "CMAKE_INSTALL_RPATH"]:
             configure_preset["cacheVariables"][k] = {
                 "type": "STRING",
@@ -589,14 +636,18 @@ def preset(parser, args):
             cm_value = cm_value or ""
 
             existing = configure_preset["cacheVariables"].get(cm_name, None)
-            if existing is not None:
-                if existing["type"] != cm_type or existing["value"] != cm_value:
-                    tty.warn(
-                        f"Overriding {cm_name} from {existing['value']}:{existing['type']}"
-                        f" to {cm_value}:{cm_type}"
-                    )
+            if existing is not None and (
+                existing["type"] != cm_type or existing["value"] != cm_value
+            ):
+                tty.warn(
+                    f"Overriding {cm_name} from {existing['value']}:{existing['type']}"
+                    f" to {cm_value}:{cm_type}"
+                )
 
-            configure_preset["cacheVariables"][cm_name] = {"type": cm_type, "value": cm_value}
+            configure_preset["cacheVariables"][cm_name] = {
+                "type": cm_type,
+                "value": cm_value,
+            }
 
         presets["configurePresets"].append(configure_preset)
 
